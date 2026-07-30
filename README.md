@@ -1,3 +1,23 @@
+# Multi-Agent Data Analytics Dashboard
+
+[中文文档](#智能数据分析看板multi-agent-协作系统)
+
+A natural language data analytics platform powered by a multi-agent pipeline. Users ask questions in Chinese, and the system automatically performs intent recognition, SQL generation, chart recommendation, and quality validation to render professional data visualizations in real-time.
+
+**Key Features:** Natural language → SQL → Chart pipeline | 4-Agent architecture (Router → SQL → Chart → Review) | Mock/LLM dual mode | Docker support
+
+**Tech Stack:** Python / FastAPI / SQLite / React / Vite / TailwindCSS / Recharts / OpenAI-compatible LLM API
+
+**Quick Start:**
+```bash
+docker compose up
+# or manually:
+cd backend && pip install -r requirements.txt && uvicorn main:app --reload
+cd frontend && npm install && npm run dev
+```
+
+---
+
 # 智能数据分析看板（Multi-Agent 协作系统）
 
 基于多 Agent 协作的自然语言数据分析平台。用户用中文提问，系统自动完成意图解析、SQL 生成、图表推荐与质量校验，实时渲染专业级数据看板。
