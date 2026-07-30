@@ -275,7 +275,7 @@ export default function App() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <StatCard title="总销售额" value={stats ? `¥${Number(stats.total_revenue || 0).toLocaleString()}` : '—'} subtitle="全部累计" icon={DollarSign} color="blue" />
           <StatCard title="平均客单价" value={stats ? `¥${Number(stats.avg_order_value || 0).toLocaleString()}` : '—'} subtitle="每笔订单" icon={ShoppingCart} color="green" />
-          <StatCard title="本月销售额" value={stats ? `¥${Number(stats.month_revenue || 0).toLocaleString()}` : '—'} subtitle={stats?.mom_change ? `环比 ${stats.mom_change}` : ''} icon={TrendingUp} color="purple" />
+          <StatCard title="本月销售额" value={stats ? `¥${Number(stats.this_month_revenue || 0).toLocaleString()}` : '—'} subtitle={stats?.mom_change ? `环比 ${stats.mom_change}%` : ''} icon={TrendingUp} color="purple" />
           <StatCard title="员工总数" value={stats ? stats.employee_count || '—' : '—'} subtitle="在职人员" icon={Users} color="orange" />
         </div>
 

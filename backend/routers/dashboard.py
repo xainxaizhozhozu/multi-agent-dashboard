@@ -5,41 +5,44 @@
 用于渲染前端的静态统计卡片和趋势图表。
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import sqlite3
 import os
 from datetime import datetime, timedelta
+from typing import Generator
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 
-def get_db():
-    """获取数据库连接"""
+def get_db() -> Generator:
+    """获取数据库连接（FastAPI 依赖注入，保证连接始终被关闭）"""
     db_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "data", "dashboard.db"
     )
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 @router.get("/stats")
-async def get_overall_stats():
+async def get_overall_stats(db: sqlite3.Connection = Depends(get_db)):
     """
     获取整体统计摘要
-    
+
     返回数据用于前端展示：
     - 总销售额
-    - 总订单数  
+    - 总订单数
     - 员工总数
     - 平均客单价
     """
-    db = get_db()
 
     # 总销售额和订单数
     result = db.execute("""
-        SELECT 
+        SELECT
             SUM(amount) as total_revenue,
             COUNT(*) as total_orders,
             ROUND(AVG(amount), 2) as avg_order_value,
@@ -68,9 +71,10 @@ async def get_overall_stats():
         (last_month,)
     ).fetchone()["total"] or 0
 
-    mom_change = round((this_month_sales - last_month_sales) / max(last_month_sales, 1) * 100, 2)
-
-    db.close()
+    if last_month_sales > 0:
+        mom_change = round((this_month_sales - last_month_sales) / last_month_sales * 100, 2)
+    else:
+        mom_change = None
 
     return {
         "total_revenue": round(result["total_revenue"] or 0, 2),
@@ -78,18 +82,17 @@ async def get_overall_stats():
         "avg_order_value": result["avg_order_value"] or 0,
         "employee_count": employee_count,
         "this_month_revenue": round(this_month_sales, 2),
-        "mom_change": mom_change,  # Month-over-Month 环比变化百分比
+        "mom_change": mom_change,
     }
 
 
 @router.get("/trends/monthly")
-async def get_monthly_trend():
+async def get_monthly_trend(db: sqlite3.Connection = Depends(get_db)):
     """
     按月销售趋势
-    
+
     返回最近6个月的数据，用于折线图展示收入变化趋势
     """
-    db = get_db()
     rows = db.execute("""
         SELECT strftime('%Y-%m', date) as month,
                SUM(amount) as revenue,
@@ -100,7 +103,6 @@ async def get_monthly_trend():
         ORDER BY month DESC
         LIMIT 6
     """).fetchall()
-    db.close()
 
     # 反转顺序，让时间从左到右递增
     result = [{"month": r["month"], "revenue": round(r["revenue"], 2),
@@ -110,13 +112,12 @@ async def get_monthly_trend():
 
 
 @router.get("/trends/daily")
-async def get_daily_trend():
+async def get_daily_trend(db: sqlite3.Connection = Depends(get_db)):
     """
     按日销售趋势（最近30天）
-    
+
     用于展示短期波动，粒度更细
     """
-    db = get_db()
     rows = db.execute("""
         SELECT date,
                SUM(amount) as revenue,
@@ -126,7 +127,6 @@ async def get_daily_trend():
         GROUP BY date
         ORDER BY date
     """).fetchall()
-    db.close()
 
     return [
         {"date": r["date"], "revenue": round(r["revenue"], 2), "orders": r["orders"]}
@@ -135,13 +135,12 @@ async def get_daily_trend():
 
 
 @router.get("/analysis/by-region")
-async def analysis_by_region():
+async def analysis_by_region(db: sqlite3.Connection = Depends(get_db)):
     """
     地区分析
-    
+
     按地区统计销售额、订单数和客户类型分布
     """
-    db = get_db()
     rows = db.execute("""
         SELECT region,
                SUM(amount) as total_amount,
@@ -160,8 +159,6 @@ async def analysis_by_region():
         ORDER BY region, count DESC
     """).fetchall()
 
-    db.close()
-
     regions = [dict(r) for r in rows]
     for r in regions:
         r["total_amount"] = round(r["total_amount"], 2)
@@ -174,13 +171,12 @@ async def analysis_by_region():
 
 
 @router.get("/analysis/by-category")
-async def analysis_by_category():
+async def analysis_by_category(db: sqlite3.Connection = Depends(get_db)):
     """
     产品类别分析
-    
+
     各产品线的营收贡献和利润估算
     """
-    db = get_db()
     rows = db.execute("""
         SELECT product_category,
                SUM(amount) as total_revenue,
@@ -190,6 +186,5 @@ async def analysis_by_category():
         GROUP BY product_category
         ORDER BY total_revenue DESC
     """).fetchall()
-    db.close()
 
     return [dict(r) for r in rows]
