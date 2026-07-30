@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart
 } from 'recharts'
 import { TrendingUp, DollarSign, ShoppingCart, Users, BarChart3, PieChart as PieIcon, Send } from 'lucide-react'
 import { dashboardApi, agentApi } from './api'
+import ErrorBoundary from './ErrorBoundary'
 
 const COLORS = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452']
 
@@ -92,6 +94,25 @@ function AgentChart({ result }) {
               <Line type="monotone" dataKey="extra" name="订单数" stroke="#91cc75" strokeWidth={2} dot={{ r: 4 }} />
             )}
           </LineChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  if (chart_type === 'combo') {
+    return (
+      <div className="mt-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">{chart_title}</h4>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" fontSize={12} />
+            <YAxis fontSize={12} />
+            <Tooltip formatter={(val) => `¥${Number(val).toLocaleString()}`} />
+            <Legend />
+            <Bar dataKey="value" name="金额" fill="#5470c6" radius={[4, 4, 0, 0]} />
+            <Line type="monotone" dataKey="extra" name="趋势" stroke="#ee6666" strokeWidth={2} dot={{ r: 4 }} />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     )
@@ -237,13 +258,13 @@ export default function App() {
     const query = input.trim()
     if (!query || loading) return
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: query }])
+    setMessages(prev => [...prev, { id: Date.now(), role: 'user', content: query }])
     setLoading(true)
     try {
       const result = await agentApi.chat(query)
-      setMessages(prev => [...prev, { role: 'agent', result }])
+      setMessages(prev => [...prev, { id: Date.now(), role: 'agent', result }])
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'agent', result: { success: false, response_text: err.message || '请求失败' } }])
+      setMessages(prev => [...prev, { id: Date.now(), role: 'agent', result: { success: false, response_text: err.message || '请求失败' } }])
     } finally {
       setLoading(false)
     }
@@ -280,6 +301,7 @@ export default function App() {
         </div>
 
         {/* 多图表区域 */}
+        <ErrorBoundary>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 月度趋势折线图 */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -344,6 +366,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        </ErrorBoundary>
 
         {/* AI 对话区域 */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -368,7 +391,7 @@ export default function App() {
               <p className="text-center text-gray-400 text-sm py-8">输入问题或点击上方推荐，AI 将自动分析并生成图表</p>
             )}
             {messages.map((msg, i) => (
-              <div key={i}>
+              <div key={msg.id || i}>
                 {msg.role === 'user' ? (
                   <div className="flex justify-end">
                     <div className="bg-blue-600 text-white px-4 py-2 rounded-xl rounded-br-sm text-sm max-w-[70%]">{msg.content}</div>

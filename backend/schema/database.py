@@ -11,8 +11,11 @@ SQLite 是一个轻量级文件数据库，不需要安装额外服务——
 
 import sqlite3
 import os
+import logging
 from datetime import datetime, timedelta
 import random
+
+logger = logging.getLogger(__name__)
 
 # 数据库文件路径（和 main.py 同级目录的 data/ 文件夹下）
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,12 +32,11 @@ def get_connection():
 
 def create_tables():
     """
-    创建四张核心表：
+    创建三张核心表：
     
     1. sales         — 销售记录（金额、地区、产品类别）
     2. employees     — 员工信息（部门、职级、薪资）
     3. products      — 产品信息（分类、成本、售价）
-    4. chart_config  — 缓存 Agent 生成的图表配置
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -79,21 +81,9 @@ def create_tables():
         )
     """)
 
-    # ── 图表配置缓存表 ───────────────────────────────
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chart_config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,        -- 会话 ID
-            query_text TEXT NOT NULL,        -- 用户原始问题
-            chart_type TEXT NOT NULL,        -- 图表类型
-            config_json TEXT NOT NULL,       -- ECharts 配置 JSON
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
     conn.commit()
     conn.close()
-    print("  ✓ 数据库表已就绪")
+    logger.info("数据库表已就绪")
 
 
 # ── 示例数据生成器 ────────────────────────────────────────
@@ -127,11 +117,11 @@ def seed_sample_data():
     # 检查是否已有数据
     cursor.execute("SELECT COUNT(*) FROM sales")
     if cursor.fetchone()[0] > 0:
-        print("  ℹ 数据库中已有数据，跳过种子注入")
+        logger.info("数据库中已有数据，跳过种子注入")
         conn.close()
         return
 
-    print("  🌱 正在注入示例数据...")
+    logger.info("正在注入示例数据...")
 
     # ── 生成销售记录 ─────────────────────────────────
     today = datetime.now()
@@ -191,4 +181,4 @@ def seed_sample_data():
 
     conn.commit()
     conn.close()
-    print(f"  ✓ 示例数据注入完成（500条销售 + {len(DEPARTMENTS)}个部门员工 + 40个产品）")
+    logger.info(f"示例数据注入完成（500条销售 + {len(DEPARTMENTS)}个部门员工 + 40个产品）")
