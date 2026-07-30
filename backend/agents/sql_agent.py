@@ -54,8 +54,17 @@ SELECT product_category, SUM(amount) as total FROM sales GROUP BY product_catego
             try:
                 parsed = json.loads(result)
                 sql_draft = parsed.get("sql", "")
-            except:
-                sql_draft = result
+            except (json.JSONDecodeError, KeyError):
+                # LLM 没有返回 JSON，尝试从原始文本中提取 SELECT 语句
+                import re
+                match = re.search(r'(SELECT\s+.+?)(?:;|\s*$)', result, re.IGNORECASE | re.DOTALL)
+                if match:
+                    sql_draft = match.group(1).strip()
+                else:
+                    return {
+                        "error": "LLM 未能生成有效的 SQL 查询",
+                        "needs_retry": True,
+                    }
         else:
             return {"error": "缺少必要的输入参数", "needs_retry": True}
 
