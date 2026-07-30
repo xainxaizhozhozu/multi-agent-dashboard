@@ -1,9 +1,11 @@
 import os
 import logging
+import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +46,24 @@ from routers.agent import router as agent_router
 
 app.include_router(dashboard_router)
 app.include_router(agent_router)
+
+
+@app.middleware("http")
+async def global_exception_handler(request: Request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as exc:
+        logger.error("Unhandled exception: %s\n%s", str(exc), traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+
+@app.get("/health", tags=["health"])
+async def health_check():
+    return {"status": "ok", "version": "1.0.0"}
 
 
 @app.get("/", tags=["health"])
