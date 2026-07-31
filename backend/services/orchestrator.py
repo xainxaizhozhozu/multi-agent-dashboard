@@ -12,6 +12,13 @@ from agents.router_agent import RouterAgent
 from agents.sql_agent import SQLAgent
 from agents.chart_agent import ChartAgent
 from agents.reviewer_agent import ReviewerAgent
+from services.pipeline_types import (
+    RouterOutput,
+    SQLAgentOutput,
+    ChartAgentOutput,
+    ReviewerOutput,
+    PipelineResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +33,10 @@ class AgentOrchestrator:
         self.chart_agent = ChartAgent(self.llm)
         self.reviewer = ReviewerAgent()
 
-    async def process_query(self, user_query: str, session_id: str = "") -> dict:
+    async def process_query(self, user_query: str, session_id: str = "") -> PipelineResult:
         """
         处理一条用户查询，依次经过 Router -> SQL -> Chart -> Review。
-        返回包含 chart_config、raw_data、sql 等字段的完整结果。
+        返回 PipelineResult（包含 chart_config、raw_data、sql 等字段）。
         """
         start_time = time.time()
         logger.info(f"[Orchestrator] query={user_query}")
@@ -37,7 +44,7 @@ class AgentOrchestrator:
         try:
             # Stage 1: Router — 意图识别
             logger.debug("[Router] analyzing intent...")
-            router_output = await self.router.process({"query": user_query})
+            router_output: RouterOutput = await self.router.process({"query": user_query})
 
             if router_output.get("needs_clarification"):
                 elapsed = time.time() - start_time
@@ -58,7 +65,7 @@ class AgentOrchestrator:
             # Stage 2: SQL Agent — 数据查询（带重试）
             logger.debug("[SQL] executing query...")
             max_retries = 2
-            sql_result = None
+            sql_result: SQLAgentOutput | None = None
 
             for attempt in range(max_retries + 1):
                 sql_input = {
@@ -72,7 +79,7 @@ class AgentOrchestrator:
 
                 logger.warning(f"[SQL] attempt {attempt + 1} failed, retrying...")
                 error_feedback = f"上一次生成的 SQL 出错了: {sql_result.get('error')}"
-                revised_plan = await self.router.process({
+                revised_plan: RouterOutput = await self.router.process({
                     **router_output,
                     "error_context": error_feedback,
                 })
@@ -94,7 +101,7 @@ class AgentOrchestrator:
                 "chart_type": chart_type or "bar",
                 "chart_title": chart_title,
             }
-            chart_result = await self.chart_agent.process(chart_input)
+            chart_result: ChartAgentOutput = await self.chart_agent.process(chart_input)
 
             if "error" in chart_result:
                 return {
@@ -109,7 +116,7 @@ class AgentOrchestrator:
                 "sql": sql_result.get("sql", ""),
                 "chart_config": chart_result.get("chart_config"),
             }
-            review_result = await self.reviewer.process(review_input)
+            review_result: ReviewerOutput = await self.reviewer.process(review_input)
 
             elapsed = time.time() - start_time
             logger.info(f"[Orchestrator] done in {elapsed:.2f}s")
