@@ -2,7 +2,8 @@
 
 import uuid
 import logging
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
+from schemas.chat import ChatRequest, ChatResponse, AgentInfo, AgentStatusResponse
 from services.orchestrator import AgentOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -21,15 +22,10 @@ def get_orchestrator() -> AgentOrchestrator:
     return _orchestrator
 
 
-@router.post("/chat")
-async def agent_chat(request: dict):
-    query = request.get("query", "").strip()
-    session_id = request.get("session_id", str(uuid.uuid4())[:8])
-
-    if not query:
-        raise HTTPException(status_code=400, detail="请输入您要分析的问题")
-    if len(query) > 500:
-        raise HTTPException(status_code=400, detail="问题过长，请控制在 500 字以内")
+@router.post("/chat", response_model=ChatResponse)
+async def agent_chat(req: ChatRequest):
+    query = req.query.strip()
+    session_id = req.session_id or str(uuid.uuid4())[:8]
 
     try:
         orch = get_orchestrator()
@@ -42,16 +38,16 @@ async def agent_chat(request: dict):
         raise HTTPException(status_code=500, detail="AI 分析服务暂时不可用，请稍后重试")
 
 
-@router.get("/status")
+@router.get("/status", response_model=AgentStatusResponse)
 async def agent_status():
     orch = _orchestrator
-    return {
-        "status": "running",
-        "agents": [
-            {"name": "Router", "role": "意图识别与任务规划"},
-            {"name": "SQL_Agent", "role": "数据查询与提取"},
-            {"name": "Chart_Agent", "role": "可视化配置生成"},
-            {"name": "Reviewer", "role": "质量审查"},
+    return AgentStatusResponse(
+        status="running",
+        agents=[
+            AgentInfo(name="Router", status="ready", description="意图识别与任务规划"),
+            AgentInfo(name="SQL_Agent", status="ready", description="数据查询与提取"),
+            AgentInfo(name="Chart_Agent", status="ready", description="可视化配置生成"),
+            AgentInfo(name="Reviewer", status="ready", description="质量审查"),
         ],
-        "ready": orch is not None,
-    }
+        ready=orch is not None,
+    )

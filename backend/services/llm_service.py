@@ -1,14 +1,13 @@
 """
 LLM 服务模块 — 封装大模型调用，支持 Mock / 真实两种模式。
-通过 .env 中 USE_MOCK_MODE 切换，Mock 模式无需 API Key。
+通过 core.config.Settings 统一管理配置，替代直接读取环境变量。
 """
 
-import os
 import json
 import logging
-from dotenv import load_dotenv
 
-load_dotenv()
+from core.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,21 +15,20 @@ class LLMService:
     """统一 LLM 接口，底层可切换 MockProvider / OpenAIProvider"""
 
     def __init__(self):
-        self.mock_mode = os.getenv("USE_MOCK_MODE", "true").lower() == "true"
+        settings = get_settings()
+        self.mock_mode = settings.use_mock_mode
 
         if self.mock_mode:
             logger.info("[LLM] mock mode enabled")
             self.provider = MockProvider()
         else:
-            api_key = os.getenv("OPENAI_API_KEY", "")
-            base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-            model = os.getenv("MODEL_NAME", "gpt-4o-mini")
-
-            if not api_key:
+            if not settings.openai_api_key:
                 raise ValueError("请配置 OPENAI_API_KEY 或设置 USE_MOCK_MODE=true")
 
             self.provider = OpenAIProvider(
-                api_key=api_key, base_url=base_url, model=model
+                api_key=settings.openai_api_key,
+                base_url=settings.openai_base_url,
+                model=settings.model_name,
             )
 
     async def chat(self, messages: list[dict]) -> str:

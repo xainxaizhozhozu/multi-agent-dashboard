@@ -7,20 +7,24 @@
 
 from fastapi import APIRouter, Depends
 import sqlite3
-import os
 from datetime import datetime, timedelta
 from typing import Generator
+
+from schema.database import DB_PATH
+from schemas.dashboard import (
+    DashboardStats,
+    MonthlyTrend,
+    DailyTrend,
+    RegionAnalysis,
+    CategoryAnalysis,
+)
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 
 def get_db() -> Generator:
     """获取数据库连接（FastAPI 依赖注入，保证连接始终被关闭）"""
-    db_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "data", "dashboard.db"
-    )
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -28,7 +32,7 @@ def get_db() -> Generator:
         conn.close()
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=DashboardStats)
 async def get_overall_stats(db: sqlite3.Connection = Depends(get_db)):
     """
     获取整体统计摘要
@@ -76,17 +80,17 @@ async def get_overall_stats(db: sqlite3.Connection = Depends(get_db)):
     else:
         mom_change = None
 
-    return {
-        "total_revenue": round(result["total_revenue"] or 0, 2),
-        "total_orders": result["total_orders"] or 0,
-        "avg_order_value": result["avg_order_value"] or 0,
-        "employee_count": employee_count,
-        "this_month_revenue": round(this_month_sales, 2),
-        "mom_change": mom_change,
-    }
+    return DashboardStats(
+        total_revenue=round(result["total_revenue"] or 0, 2),
+        total_orders=result["total_orders"] or 0,
+        avg_order_value=result["avg_order_value"] or 0,
+        employee_count=employee_count,
+        this_month_revenue=round(this_month_sales, 2),
+        mom_change=mom_change,
+    )
 
 
-@router.get("/trends/monthly")
+@router.get("/trends/monthly", response_model=list[MonthlyTrend])
 async def get_monthly_trend(db: sqlite3.Connection = Depends(get_db)):
     """
     按月销售趋势
@@ -105,13 +109,20 @@ async def get_monthly_trend(db: sqlite3.Connection = Depends(get_db)):
     """).fetchall()
 
     # 反转顺序，让时间从左到右递增
-    result = [{"month": r["month"], "revenue": round(r["revenue"], 2),
-               "orders": r["orders"], "avg_order": r["avg_order"]} for r in reversed(rows)]
+    result = [
+        MonthlyTrend(
+            month=r["month"],
+            revenue=round(r["revenue"], 2),
+            orders=r["orders"],
+            avg_order=r["avg_order"],
+        )
+        for r in reversed(rows)
+    ]
 
     return result
 
 
-@router.get("/trends/daily")
+@router.get("/trends/daily", response_model=list[DailyTrend])
 async def get_daily_trend(db: sqlite3.Connection = Depends(get_db)):
     """
     按日销售趋势（最近30天）
@@ -129,12 +140,16 @@ async def get_daily_trend(db: sqlite3.Connection = Depends(get_db)):
     """).fetchall()
 
     return [
-        {"date": r["date"], "revenue": round(r["revenue"], 2), "orders": r["orders"]}
+        DailyTrend(
+            date=r["date"],
+            revenue=round(r["revenue"], 2),
+            orders=r["orders"],
+        )
         for r in rows
     ]
 
 
-@router.get("/analysis/by-region")
+@router.get("/analysis/by-region", response_model=list[RegionAnalysis])
 async def analysis_by_region(db: sqlite3.Connection = Depends(get_db)):
     """
     地区分析
@@ -159,18 +174,23 @@ async def analysis_by_region(db: sqlite3.Connection = Depends(get_db)):
         ORDER BY region, count DESC
     """).fetchall()
 
-    regions = [dict(r) for r in rows]
-    for r in regions:
-        r["total_amount"] = round(r["total_amount"], 2)
-        r["customer_distribution"] = {
-            r2["customer_type"]: r2["count"]
-            for r2 in customer_types if r2["region"] == r["region"]
-        }
+    regions = []
+    for r in rows:
+        regions.append(RegionAnalysis(
+            region=r["region"],
+            total_amount=round(r["total_amount"], 2),
+            order_count=r["order_count"],
+            avg_amount=r["avg_amount"],
+            customer_distribution={
+                r2["customer_type"]: r2["count"]
+                for r2 in customer_types if r2["region"] == r["region"]
+            },
+        ))
 
     return regions
 
 
-@router.get("/analysis/by-category")
+@router.get("/analysis/by-category", response_model=list[CategoryAnalysis])
 async def analysis_by_category(db: sqlite3.Connection = Depends(get_db)):
     """
     产品类别分析
@@ -187,4 +207,12 @@ async def analysis_by_category(db: sqlite3.Connection = Depends(get_db)):
         ORDER BY total_revenue DESC
     """).fetchall()
 
-    return [dict(r) for r in rows]
+    return [
+        CategoryAnalysis(
+            product_category=r["product_category"],
+            total_revenue=round(r["total_revenue"], 2),
+            order_count=r["order_count"],
+            avg_amount=r["avg_amount"],
+        )
+        for r in rows
+    ]

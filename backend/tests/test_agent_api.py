@@ -12,25 +12,24 @@ from unittest.mock import AsyncMock, patch
 
 
 class TestAgentChatValidation:
+    """Pydantic ChatRequest 校验：无效输入返回 422"""
 
-    def test_empty_query_returns_400(self, client):
+    def test_empty_query_returns_422(self, client):
         resp = client.post("/api/v1/agent/chat", json={"query": ""})
-        assert resp.status_code == 400
-        assert "detail" in resp.json()
+        assert resp.status_code == 422
 
-    def test_whitespace_only_query_returns_400(self, client):
+    def test_whitespace_only_query_returns_422(self, client):
         resp = client.post("/api/v1/agent/chat", json={"query": "   "})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
-    def test_missing_query_field_returns_400(self, client):
+    def test_missing_query_field_returns_422(self, client):
         resp = client.post("/api/v1/agent/chat", json={})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
-    def test_query_too_long_returns_400(self, client):
+    def test_query_too_long_returns_422(self, client):
         long_query = "a" * 501
         resp = client.post("/api/v1/agent/chat", json={"query": long_query})
-        assert resp.status_code == 400
-        assert "500" in resp.json()["detail"] or "\u8fc7\u957f" in resp.json()["detail"]
+        assert resp.status_code == 422
 
     def test_query_exactly_500_chars_is_ok(self, client):
         query = "a" * 500
@@ -39,7 +38,7 @@ class TestAgentChatValidation:
             mock_orch.process_query = AsyncMock(return_value={"success": True})
             mock_get.return_value = mock_orch
             resp = client.post("/api/v1/agent/chat", json={"query": query})
-            assert resp.status_code != 400
+            assert resp.status_code != 422
 
 
 class TestAgentChatWithMockedOrchestrator:

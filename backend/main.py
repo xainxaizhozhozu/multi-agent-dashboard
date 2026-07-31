@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_db():
-    from schema.database import create_tables, seed_sample_data
+    from schema import create_tables, seed_sample_data
     logger.info("initializing database...")
     create_tables()
     seed_sample_data()
